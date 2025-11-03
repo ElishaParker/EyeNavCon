@@ -1,7 +1,8 @@
 /**
  * EyeNav – tracker.js
  * Stable, smoothed, and rate-limited gaze tracking pipeline.
- * Bright video feed + WebGazer integration + single visual cursor.
+ * Includes explicit WebGazer model loading, face/eye debug overlay, and
+ * auto-recovery handling.
  */
 
 export async function initTracker() {
@@ -43,8 +44,7 @@ export async function initTracker() {
     await video.play();
     console.log('[EyeNav] Webcam stream active.');
 
-    // apply brightness config
-    const brightness = window.EyeNavConfig?.brightness || 1.4;
+    const brightness = window.EyeNavConfig?.brightness || 1.5;
     video.style.filter = `brightness(${brightness}) contrast(1.2)`;
   } catch (err) {
     console.error('[EyeNav] Camera access failed:', err);
@@ -60,43 +60,52 @@ export async function initTracker() {
     return;
   }
 
-  // purge any old internal overlays (ghost dots, etc.)
+  // Remove any ghost overlays left from previous sessions
   document.querySelectorAll('[id^="webgazer"]').forEach((el) => el.remove());
 
-  // Rate-limited gaze listener
-  let lastEmit = 0;
-  const emitInterval = 1000 / 30; // 30Hz cap for performance
+  console.log('[EyeNav] Loading WebGazer model…');
 
-  window.webgazer
-    .showVideoPreview(false)
-    .showPredictionPoints(false)
-    .showFaceOverlay(false)
-    .setRegression('ridge')
-    .setTracker('clmtrackr')
-    .setGazeListener((data, elapsedTime) => {
-      if (!data) return;
-      const now = performance.now();
-      if (now - lastEmit < emitInterval) return;
-      lastEmit = now;
+  // Explicit initialization sequence
+  try {
+    await window.webgazer.setTracker('clmtrackr');
+    await window.webgazer.setRegression('ridge');
+    await window.webgazer.begin();
+    console.log('[EyeNav] WebGazer model loaded.');
+  } catch (err) {
+    console.error('[EyeNav] WebGazer initialization failed:', err);
+    return;
+  }
 
-      const x = Math.min(Math.max(data.x, 0), window.innerWidth);
-      const y = Math.min(Math.max(data.y, 0), window.innerHeight);
-      document.dispatchEvent(
-        new CustomEvent('gazeUpdate', { detail: { x, y, t: elapsedTime } })
-      );
-    })
-    .begin()
-    .then(() => {
-      setTimeout(() => {
-        document.querySelectorAll('[id^="webgazer"]').forEach((el) => el.remove());
-        console.log('[EyeNav] WebGazer overlays purged.');
-      }, 1500);
-    });
+  // Show visual overlays for calibration confirmation
+  window.webgazer.showVideoPreview(true);
+  window.webgazer.showFaceOverlay(true);
+  window.webgazer.showPredictionPoints(true);
 
-  console.log('[EyeNav] WebGazer started.');
+  console.log('[EyeNav] Face overlay and prediction points enabled for testing.');
 
   // -------------------------------------------------
-  // 3. Brightness boost for internal WebGazer feed
+  // 3. Listen for gaze predictions
+  // -------------------------------------------------
+  let lastEmit = 0;
+  const emitInterval = 1000 / 30; // limit to 30Hz
+
+  window.webgazer.setGazeListener((data, elapsedTime) => {
+    if (!data) return;
+    const now = performance.now();
+    if (now - lastEmit < emitInterval) return;
+    lastEmit = now;
+
+    const x = Math.min(Math.max(data.x, 0), window.innerWidth);
+    const y = Math.min(Math.max(data.y, 0), window.innerHeight);
+    document.dispatchEvent(
+      new CustomEvent('gazeUpdate', { detail: { x, y, t: elapsedTime } })
+    );
+  });
+
+  console.log('[EyeNav] Gaze listener active.');
+
+  // -------------------------------------------------
+  // 4. Apply brightness to internal feed
   // -------------------------------------------------
   setTimeout(() => {
     const wgVideo =
@@ -122,7 +131,7 @@ export async function initTracker() {
   }, 2500);
 
   // -------------------------------------------------
-  // 4. Auto-recovery if WebGazer stalls
+  // 5. Auto-recovery if WebGazer stalls
   // -------------------------------------------------
   let lastUpdate = performance.now();
   document.addEventListener('gazeUpdate', () => (lastUpdate = performance.now()));
@@ -142,7 +151,7 @@ export async function initTracker() {
   }, 5000);
 
   // -------------------------------------------------
-  // 5. Smooth visual overlay cursor
+  // 6. Smooth debug overlay dot
   // -------------------------------------------------
   const overlay = document.getElementById('overlayCanvas');
   if (overlay) {
@@ -171,7 +180,7 @@ export async function initTracker() {
   }
 
   // -------------------------------------------------
-  // 6. Resize safety
+  // 7. Resize safety
   // -------------------------------------------------
   window.addEventListener('resize', () => {
     video.width = window.innerWidth;
@@ -181,6 +190,17 @@ export async function initTracker() {
       overlay.height = window.innerHeight;
     }
   });
+
+  // -------------------------------------------------
+  // 8. Post-calibration cleanup option
+  // -------------------------------------------------
+  // (you can toggle overlays off later once confirmed tracking works)
+  window.hideWebGazerDebug = () => {
+    window.webgazer.showVideoPreview(false);
+    window.webgazer.showFaceOverlay(false);
+    window.webgazer.showPredictionPoints(false);
+    console.log('[EyeNav] WebGazer debug overlays hidden.');
+  };
 
   console.log('[EyeNav] Tracker fully initialized.');
 }
