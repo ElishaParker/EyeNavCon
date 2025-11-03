@@ -1,19 +1,7 @@
-/**
- * EyeNav – menuSystem.js
- * On-screen configuration panel for dwell, smoothing, and calibration.
- * Updates global config live and persists changes via storage.js.
- */
-
-import { saveSettings } from "../core/storage.js";
-import { recalibrate } from "../core/tracker.js";
-
-export async function initMenu() {
-  console.log("[EyeNav] Initializing settings menu…");
-  const container = document.getElementById("menuContainer");
-
-  container.innerHTML = `
-    <div id="menu">
-      <h3>⚙️ EyeNav Settings</h3>
+container.innerHTML = `
+  <div id="menu">
+    <div id="menuHeader">⚙️ <span>EyeNav Settings</span></div>
+    <div id="menuBody">
       <label>Smoothing 
         <input id="smoothRange" type="range" min="0" max="1" step="0.05" value="${window.EyeNavConfig.smoothing}">
         <span id="smoothVal">${window.EyeNavConfig.smoothing}</span>
@@ -26,32 +14,15 @@ export async function initMenu() {
         <input id="deadRange" type="range" min="0" max="50" step="2" value="${window.EyeNavConfig.deadZone}">
         <span id="deadVal">${window.EyeNavConfig.deadZone}</span>
       </label>
-      <button id="calibrateBtn">Re-Calibrate</button>
-      <button id="saveBtn">💾 Save</button>
-      <button id="resetBtn">♻️ Reset</button>
+      <div class="menuButtons">
+        <button id="calibrateBtn">Re-Calibrate</button>
+        <button id="saveBtn">💾 Save</button>
+        <button id="resetBtn">♻️ Reset</button>
+      </div>
     </div>
-  `;
+  </div>
+`;
 
-  // live updates
-  const update = (key, val) => {
-    window.EyeNavConfig[key] = val;
-    document.getElementById(`${key === "smoothing" ? "smooth" : key === "dwellTime" ? "dwell" : "dead"}Val`).textContent = val;
-  };
-
-  document.getElementById("smoothRange").oninput = e => update("smoothing", parseFloat(e.target.value));
-  document.getElementById("dwellRange").oninput  = e => update("dwellTime", parseInt(e.target.value));
-  document.getElementById("deadRange").oninput   = e => update("deadZone", parseInt(e.target.value));
-
-  document.getElementById("saveBtn").onclick = async () => {
-    await saveSettings("config", window.EyeNavConfig);
-    alert("Settings saved!");
-  };
-
-  document.getElementById("resetBtn").onclick = () => {
-    localStorage.clear();
-    alert("Settings cleared. Reloading…");
-    location.reload();
-  };
-
-  document.getElementById("calibrateBtn").onclick = () => recalibrate();
-}
+const header = document.getElementById("menuHeader");
+const body = document.getElementById("menuBody");
+header.onclick = () => body.classList.toggle("collapsed");
