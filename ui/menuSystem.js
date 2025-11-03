@@ -99,12 +99,12 @@ export function initMenu() {
     console.log('[EyeNav] Settings reset.');
   };
 
-  document.getElementById('calibrateBtn').onclick = () => {
-    if (window.webgazer) {
-      window.webgazer.clearData();
-      alert('Calibration reset. Look at the screen edges to re-train.');
-    } else {
-      console.warn('[EyeNav] WebGazer not available.');
-    }
-  };
+  //document.getElementById('calibrateBtn').onclick = () => {
+   // if (window.webgazer) {
+   //   window.webgazer.clearData();
+  //    alert('Calibration reset. Look at the screen edges to re-train.');
+   // } else {
+  //    console.warn('[EyeNav] WebGazer not available.');
+//    }
+//  };
 }
