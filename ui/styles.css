@@ -12,10 +12,11 @@ body {
 #eyeVideo {
   position: fixed;
   top: 0; left: 0;
-  width: 100%; height: 100%;
+  width: 100vw; height: 100vh;
   object-fit: cover;
   transform: scaleX(-1);
   opacity: 0.25;
+  z-index: -1;
 }
 
 /* Visual cursor */
@@ -27,6 +28,7 @@ body {
   pointer-events: none;
   transform: translate(-50%, -50%);
   transition: transform 0.05s linear;
+  z-index: 30;
 }
 
 /* Overlay canvas */
@@ -35,6 +37,7 @@ body {
   top: 0; left: 0;
   width: 100%; height: 100%;
   pointer-events: none;
+  z-index: 5;
 }
 
 /* Menu panel */
@@ -46,37 +49,90 @@ body {
   border: 1px solid rgba(0,255,255,0.4);
   border-radius: 10px;
   backdrop-filter: blur(5px);
-  z-index: 20;
+  z-index: 40;
+  box-shadow: 0 0 8px rgba(0,255,255,0.2);
 }
 
-#menu h3 {
-  margin-top: 0;
+/* Menu title bar */
+#menuHeader {
+  font-weight: 700;
   color: cyan;
+  cursor: pointer;
+  user-select: none;
   font-size: 1.1rem;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+#menuHeader:hover {
+  text-shadow: 0 0 5px cyan;
 }
 
+/* Menu body */
+#menuBody {
+  overflow: hidden;
+  transition: max-height 0.25s ease-in-out, opacity 0.25s ease-in-out;
+  max-height: 400px;
+  opacity: 1;
+}
+#menuBody.collapsed {
+  max-height: 0;
+  opacity: 0;
+}
+
+/* Label and slider layout */
 #menu label {
-  display: block;
-  margin: 8px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   font-size: 0.9rem;
+  margin: 6px 0;
 }
 
 #menu input[type="range"] {
-  width: 140px;
+  width: 120px;
   accent-color: cyan;
+  margin-left: 8px;
+}
+
+#menu span {
+  min-width: 30px;
+  text-align: right;
+  color: #7fffd4;
+}
+
+/* Buttons */
+.menuButtons {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
 }
 
 #menu button {
-  margin: 5px 6px 0 0;
   background: rgba(0,255,255,0.1);
   border: 1px solid rgba(0,255,255,0.4);
   color: cyan;
-  padding: 5px 10px;
+  padding: 6px 12px;
   border-radius: 6px;
   cursor: pointer;
   font-weight: 600;
-  transition: background 0.2s;
+  transition: background 0.2s, transform 0.1s;
 }
 #menu button:hover {
   background: rgba(0,255,255,0.3);
+  transform: scale(1.03);
+}
+
+/* Diagnostics HUD */
+#EyeNavDiag {
+  font-family: monospace;
+  font-size: 12px;
+  color: cyan;
+  position: fixed;
+  bottom: 10px; right: 10px;
+  background: rgba(0,0,0,0.6);
+  padding: 6px 10px;
+  border-radius: 6px;
+  z-index: 50;
 }
