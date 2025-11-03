@@ -30,22 +30,68 @@
     import { restoreSettings } from './core/storage.js';
     import { connectToEyeNav, EyeNavDiagnostics } from './integration/connectToEyeNav.js';
 
-    // Initialize core EyeNav modules
+    // -------------------------
+    // 1. Initialize all modules
+    // -------------------------
     await restoreSettings();
     await initTracker();
     await initBlinkDetector();
     await initCursor();
     await initMenu();
 
-    // ---- Integration + Diagnostics Section ----
+    // -------------------------
+    // 2. Integration + Diagnostics
+    // -------------------------
     const bridge = connectToEyeNav({
-      onGaze: (x, y) => console.log("Gaze:", x.toFixed(0), y.toFixed(0)),
-      onBlink: info => console.log("Blink detected:", info),
-      onClick: info => console.log("Click event:", info)
+      onGaze: (x, y) => {}, // no console spam now
+      onBlink: info => console.log("[Blink detected]", info),
+      onClick: info => console.log("[Click event]", info)
     });
 
-    // Optional visual HUD bottom-right showing coordinates + blink count
     EyeNavDiagnostics.enable();
+
+    // -------------------------
+    // 3. Quick Auto-Calibration
+    // -------------------------
+    console.log("[EyeNav] Starting quick calibration...");
+
+    const points = [
+      [0.1, 0.1], [0.9, 0.1],
+      [0.5, 0.5],
+      [0.1, 0.9], [0.9, 0.9]
+    ];
+
+    const calibDot = document.createElement('div');
+    Object.assign(calibDot.style, {
+      position: 'fixed',
+      width: '20px',
+      height: '20px',
+      background: 'cyan',
+      borderRadius: '50%',
+      pointerEvents: 'none',
+      zIndex: 9999,
+      transition: 'all 0.4s ease-out'
+    });
+    document.body.appendChild(calibDot);
+
+    // Sequentially move the dot and collect gaze data
+    for (const [nx, ny] of points) {
+      calibDot.style.left = `${nx * window.innerWidth - 10}px`;
+      calibDot.style.top  = `${ny * window.innerHeight - 10}px`;
+      await new Promise(r => setTimeout(r, 1200));
+
+      // Collect 1 second of samples
+      for (let i = 0; i < 30; i++) {
+        const prediction = await window.webgazer.getCurrentPrediction();
+        if (prediction) {
+          window.webgazer.addDataPoint(prediction.x, prediction.y);
+        }
+        await new Promise(r => setTimeout(r, 33));
+      }
+    }
+
+    calibDot.remove();
+    console.log("[EyeNav] Quick calibration complete. Tracking active.");
   </script>
 </body>
 </html>
