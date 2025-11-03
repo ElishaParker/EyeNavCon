@@ -133,46 +133,75 @@ export async function initTracker() {
 
   // -------------------------------------------------
   // -------------------------------------------------
-  // 4. Gaze listener – cross-browser fixed
+  // -------------------------------------------------
+  // 4. Calibrated gaze listener – converts preview scale to viewport scale
   // -------------------------------------------------
   let lastEmit = 0;
   const emitInterval = 1000 / 30; // 30Hz
-  let globalListenerAttached = false;
+  let previewRect = null;
 
-  function attachGlobalGazeListener() {
-    if (globalListenerAttached) return;
-    globalListenerAttached = true;
+  function getPreviewRect() {
+    const preview = document.querySelector('#webgazerVideoFeed') || document.querySelector('video[src^="blob"]');
+    if (!preview) return null;
 
-    const gzr = window.webgazer;
+    const rect = preview.getBoundingClientRect();
+    return {
+      x: rect.left,
+      y: rect.top,
+      w: rect.width,
+      h: rect.height,
+    };
+}
 
-    gzr.setGazeListener((data, elapsedTime) => {
-      if (!data) return;
+function remapToViewport(data) {
+  if (!previewRect) previewRect = getPreviewRect();
+  if (!previewRect) return { x: data.x, y: data.y };
 
-      const now = performance.now();
-      if (now - lastEmit < emitInterval) return;
-      lastEmit = now;
+  // Compute proportional position within preview window
+  const px = (data.x - 0) / previewRect.w; // 0 → 1 horizontally
+  const py = (data.y - 0) / previewRect.h; // 0 → 1 vertically
 
-      // Always re-sync dimensions in case the browser changed layout
-      const container = document.getElementById('webgazerContainer');
-      const containerW = container?.offsetWidth || window.innerWidth;
-      const containerH = container?.offsetHeight || window.innerHeight;
+  // Map those proportions to full window
+  const vx = px * window.innerWidth;
+  const vy = py * window.innerHeight;
 
-      const videoW = gzr.params?.videoWidth || containerW;
-      const videoH = gzr.params?.videoHeight || containerH;
-      const scaleX = window.innerWidth / videoW;
-      const scaleY = window.innerHeight / videoH;
+  return { x: vx, y: vy };
+}
 
-      const x = Math.min(Math.max(data.x * scaleX, 0), window.innerWidth);
-      const y = Math.min(Math.max(data.y * scaleY, 0), window.innerHeight);
+function attachScaledGazeListener() {
+  console.log('[EyeNav] Scaled gaze listener active.');
 
-      // Dispatch to global window context for all listeners
-      window.dispatchEvent(
-        new CustomEvent('gazeUpdate', { detail: { x, y, t: elapsedTime } })
-      );
-    });
+  window.webgazer.setGazeListener((data, elapsedTime) => {
+    if (!data) return;
 
-    console.log('[EyeNav] Global gaze listener attached.');
-  }
+    const now = performance.now();
+    if (now - lastEmit < emitInterval) return;
+    lastEmit = now;
+
+    const mapped = remapToViewport(data);
+
+    // Clamp to window bounds
+    const x = Math.min(Math.max(mapped.x, 0), window.innerWidth);
+    const y = Math.min(Math.max(mapped.y, 0), window.innerHeight);
+
+    window.dispatchEvent(
+      new CustomEvent('gazeUpdate', { detail: { x, y, t: elapsedTime } })
+    );
+  });
+}
+
+  // Refresh the preview rect when layout changes
+  window.addEventListener('resize', () => (previewRect = getPreviewRect()));
+  new MutationObserver(() => (previewRect = getPreviewRect())).observe(document.body, { childList: true, subtree: true });
+
+  // Start listener once WebGazer is ready
+  const gazeWait = setInterval(() => {
+    if (window.webgazer?.isReady) {
+      attachScaledGazeListener();
+      clearInterval(gazeWait);
+    }
+  }, 500);
+
 
   // Retry until model is active
   const listenerWait = setInterval(() => {
