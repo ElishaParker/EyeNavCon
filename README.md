@@ -31,3 +31,4 @@ Built entirely with **native browser APIs** (HTML5 + JavaScript + Canvas + Web A
    ```bash
    git clone https://ElishaParker/EyeNavCon.git
    cd EyeNav
+Support Open Development paypal.me/iamvibration
