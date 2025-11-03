@@ -26,6 +26,17 @@ export async function initTracker() {
   startLoop();
 }
 
+window.webgazer.showVideo(false).showFaceOverlay(false);
+const video = document.getElementById("eyeVideo");
+navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+  .then(stream => {
+    video.srcObject = stream;
+    video.style.objectFit = "cover";
+    video.style.width = "100vw";
+    video.style.height = "100vh";
+  })
+  .catch(err => console.error("[EyeNav] Camera init failed:", err));
+
 /**
  * Basic linear interpolation smoothing.
  */
