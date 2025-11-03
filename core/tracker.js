@@ -107,28 +107,47 @@ export async function initTracker() {
   // -------------------------------------------------
   // 4. Apply brightness to internal feed
   // -------------------------------------------------
-  setTimeout(() => {
-    const wgVideo =
-      document.querySelector('#webgazerVideoFeed') ||
-      document.querySelector('video[src^="blob"]');
-    if (wgVideo) {
-      const brightness = window.EyeNavConfig?.brightness || 1.6;
-      Object.assign(wgVideo.style, {
-        filter: `brightness(${brightness}) contrast(1.3)`,
-        opacity: '1',
-        display: 'block',
-        position: 'fixed',
-        top: '0',
-        left: '0',
-        width: '100vw',
-        height: '100vh',
-        objectFit: 'cover',
-        transform: 'scaleX(-1)',
-        zIndex: '-2',
-      });
-      console.log('[EyeNav] Brightness filter applied to internal WebGazer video.');
+  // -------------------------------------------------
+// 4. Force internal WebGazer feed to fullscreen, adaptive to viewport
+// -------------------------------------------------
+  function resizeWebGazerFeed() {
+    const wgVideo = document.querySelector('#webgazerVideoFeed');
+    if (!wgVideo) return;
+
+    const brightness = window.EyeNavConfig?.brightness || 1.6;
+    Object.assign(wgVideo.style, {
+      position: 'fixed',
+      top: '0',
+      left: '0',
+      width: `${window.innerWidth}px`,
+      height: `${window.innerHeight}px`,
+      objectFit: 'cover',
+      transform: 'scaleX(-1)',
+      filter: `brightness(${brightness}) contrast(1.3)`,
+      opacity: '1',
+      zIndex: '-2',
+      pointerEvents: 'none',
+    });
+
+    // ensure WebGazer normalizes coordinates to viewport dimensions
+    if (window.webgazer?.params) {
+      window.webgazer.params.videoWidth = window.innerWidth;
+      window.webgazer.params.videoHeight = window.innerHeight;
     }
-  }, 2500);
+    console.log('[EyeNav] WebGazer feed resized to viewport.');
+  }
+
+  // initial resize once feed is ready
+  setTimeout(() => {
+    resizeWebGazerFeed();
+    // some WebGazer versions delay-inject the feed element:
+    const observer = new MutationObserver(() => resizeWebGazerFeed());
+    observer.observe(document.body, { childList: true, subtree: true });
+  }, 2000);
+
+// dynamic reflow on browser resize
+window.addEventListener('resize', resizeWebGazerFeed);
+
 
   // -------------------------------------------------
   // 5. Auto-recovery if WebGazer stalls
