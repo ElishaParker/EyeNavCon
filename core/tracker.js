@@ -57,30 +57,45 @@ export async function initTracker() {
   // ------------------------------------
   // 2. Initialize WebGazer for gaze data
   // ------------------------------------
+   // ------------------------------------
+  // 2. Initialize WebGazer for gaze data
+  // ------------------------------------
   if (!window.webgazer) {
     console.error('[EyeNav] WebGazer.js not loaded.');
     return;
   }
 
-  // Hide WebGazer internal preview and overlays
+  // Forcefully remove any old prediction or overlay elements
+  document.querySelectorAll('[id^="webgazer"]').forEach(el => el.remove());
+
+  // Start WebGazer with minimal visual footprint
   window.webgazer
     .showVideoPreview(false)
     .showPredictionPoints(false)
-    .showFaceOverlay(false);
-
-  // Basic calibration model
-  window.webgazer
+    .showFaceOverlay(false)
     .setRegression('ridge')
+    .setTracker('clmtrackr')
     .setGazeListener((data, elapsedTime) => {
       if (!data) return;
+
       const x = Math.min(Math.max(data.x, 0), window.innerWidth);
       const y = Math.min(Math.max(data.y, 0), window.innerHeight);
+
+      // Dispatch unified event
       const evt = new CustomEvent('gazeUpdate', { detail: { x, y, t: elapsedTime } });
       document.dispatchEvent(evt);
     })
-    .begin();
+    .begin()
+    .then(() => {
+      // After start, remove any residual prediction canvas again
+      setTimeout(() => {
+        document.querySelectorAll('[id^="webgazer"]').forEach(el => el.remove());
+        console.log('[EyeNav] WebGazer overlays purged.');
+      }, 1500);
+    });
 
-  console.log('[EyeNav] WebGazer started.');
+  console.log('[EyeNav] WebGazer started (clean mode).');
+
 
   // ------------------------------------------
   // 3. Apply brightness to internal WebGazer feed
