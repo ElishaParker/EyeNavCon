@@ -1,8 +1,8 @@
 /**
  * EyeNav – tracker.js
  * Stable, smoothed, and rate-limited gaze tracking pipeline.
- * Includes explicit WebGazer model loading, face/eye debug overlay, and
- * auto-recovery handling.
+ * Includes explicit WebGazer model loading, full-viewport normalization,
+ * face/eye debug overlay, and auto-recovery handling.
  */
 
 export async function initTracker() {
@@ -53,19 +53,16 @@ export async function initTracker() {
   }
 
   // -------------------------------------------------
-  // 2. Initialize WebGazer for gaze data
+  // 2. Initialize WebGazer
   // -------------------------------------------------
   if (!window.webgazer) {
     console.error('[EyeNav] WebGazer.js not loaded.');
     return;
   }
 
-  // Remove any ghost overlays left from previous sessions
   document.querySelectorAll('[id^="webgazer"]').forEach((el) => el.remove());
-
   console.log('[EyeNav] Loading WebGazer model…');
 
-  // Explicit initialization sequence
   try {
     await window.webgazer.setTracker('clmtrackr');
     await window.webgazer.setRegression('ridge');
@@ -76,19 +73,57 @@ export async function initTracker() {
     return;
   }
 
-  // Show visual overlays for calibration confirmation
+  // Calibration overlays for testing
   window.webgazer.showVideoPreview(true);
   window.webgazer.showFaceOverlay(true);
   window.webgazer.showPredictionPoints(true);
-
-  console.log('[EyeNav] Face overlay and prediction points enabled for testing.');
+  console.log('[EyeNav] Face overlay and prediction points enabled.');
 
   // -------------------------------------------------
-  // 3. Listen for gaze predictions
+  // 3. Unified feed normalization (cross-browser)
+  // -------------------------------------------------
+  function ensureFeedConsistency() {
+    const wgVideo =
+      document.querySelector('#webgazerVideoFeed') ||
+      document.querySelector('video[src^="blob"]');
+    if (!wgVideo) return;
+
+    const brightness = window.EyeNavConfig?.brightness || 1.6;
+    Object.assign(wgVideo.style, {
+      position: 'fixed',
+      top: '0',
+      left: '0',
+      width: '100vw',
+      height: '100vh',
+      objectFit: 'cover',
+      transform: 'scaleX(-1)',
+      filter: `brightness(${brightness}) contrast(1.3)`,
+      opacity: '1',
+      zIndex: '-2',
+      pointerEvents: 'none',
+    });
+
+    // normalize coordinates across browsers
+    if (window.webgazer?.params) {
+      window.webgazer.params.videoWidth = window.innerWidth;
+      window.webgazer.params.videoHeight = window.innerHeight;
+      window.webgazer.params.screenshotWidth = window.innerWidth;
+      window.webgazer.params.screenshotHeight = window.innerHeight;
+    }
+    console.log('[EyeNav] Unified feed + viewport normalization applied.');
+  }
+
+  // Apply after model load + on DOM changes
+  setTimeout(ensureFeedConsistency, 1500);
+  const observer = new MutationObserver(ensureFeedConsistency);
+  observer.observe(document.body, { childList: true, subtree: true });
+  window.addEventListener('resize', ensureFeedConsistency);
+
+  // -------------------------------------------------
+  // 4. Gaze listener
   // -------------------------------------------------
   let lastEmit = 0;
-  const emitInterval = 1000 / 30; // limit to 30Hz
-
+  const emitInterval = 1000 / 30; // 30Hz
   window.webgazer.setGazeListener((data, elapsedTime) => {
     if (!data) return;
     const now = performance.now();
@@ -105,56 +140,10 @@ export async function initTracker() {
   console.log('[EyeNav] Gaze listener active.');
 
   // -------------------------------------------------
-  // 4. Apply brightness to internal feed
-  // -------------------------------------------------
-  // -------------------------------------------------
-// 4. Force internal WebGazer feed to fullscreen, adaptive to viewport
-// -------------------------------------------------
-  function resizeWebGazerFeed() {
-    const wgVideo = document.querySelector('#webgazerVideoFeed');
-    if (!wgVideo) return;
-
-    const brightness = window.EyeNavConfig?.brightness || 1.6;
-    Object.assign(wgVideo.style, {
-      position: 'fixed',
-      top: '0',
-      left: '0',
-      width: `${window.innerWidth}px`,
-      height: `${window.innerHeight}px`,
-      objectFit: 'cover',
-      transform: 'scaleX(-1)',
-      filter: `brightness(${brightness}) contrast(1.3)`,
-      opacity: '1',
-      zIndex: '-2',
-      pointerEvents: 'none',
-    });
-
-    // ensure WebGazer normalizes coordinates to viewport dimensions
-    if (window.webgazer?.params) {
-      window.webgazer.params.videoWidth = window.innerWidth;
-      window.webgazer.params.videoHeight = window.innerHeight;
-    }
-    console.log('[EyeNav] WebGazer feed resized to viewport.');
-  }
-
-  // initial resize once feed is ready
-  setTimeout(() => {
-    resizeWebGazerFeed();
-    // some WebGazer versions delay-inject the feed element:
-    const observer = new MutationObserver(() => resizeWebGazerFeed());
-    observer.observe(document.body, { childList: true, subtree: true });
-  }, 2000);
-
-// dynamic reflow on browser resize
-window.addEventListener('resize', resizeWebGazerFeed);
-
-
-  // -------------------------------------------------
   // 5. Auto-recovery if WebGazer stalls
   // -------------------------------------------------
   let lastUpdate = performance.now();
   document.addEventListener('gazeUpdate', () => (lastUpdate = performance.now()));
-
   setInterval(() => {
     const now = performance.now();
     if (now - lastUpdate > 5000) {
@@ -213,7 +202,6 @@ window.addEventListener('resize', resizeWebGazerFeed);
   // -------------------------------------------------
   // 8. Post-calibration cleanup option
   // -------------------------------------------------
-  // (you can toggle overlays off later once confirmed tracking works)
   window.hideWebGazerDebug = () => {
     window.webgazer.showVideoPreview(false);
     window.webgazer.showFaceOverlay(false);
