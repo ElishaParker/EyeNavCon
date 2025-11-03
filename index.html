@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EyeNav Prototype</title>
+  <link rel="stylesheet" href="./ui/styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/webgazer/dist/webgazer.min.js"></script>
+</head>
+
+<body>
+  <!-- Live camera preview -->
+  <video id="eyeVideo" autoplay playsinline></video>
+
+  <!-- Overlay canvas for crosshair / dwell ring -->
+  <canvas id="overlayCanvas"></canvas>
+
+  <!-- Floating cursor -->
+  <div id="cursorDot"></div>
+
+  <!-- Settings menu -->
+  <div id="menuContainer"></div>
+
+  <script type="module">
+    import { initTracker } from './core/tracker.js';
+    import { initBlinkDetector } from './core/blinkDetector.js';
+    import { initCursor } from './core/cursorControl.js';
+    import { initMenu } from './ui/menuSystem.js';
+    import { restoreSettings } from './core/storage.js';
+
+    await restoreSettings();
+    await initTracker();
+    await initBlinkDetector();
+    await initCursor();
+    await initMenu();
+  </script>
+</body>
+</html>
