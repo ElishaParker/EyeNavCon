@@ -1,105 +1,129 @@
 /**
- * EyeNav - tracker.js
- * Initializes WebGazer, calibration, smoothing, and dead-zone gaze output.
+ * EyeNav – tracker.js
+ * Initializes WebGazer gaze tracking and webcam feed for EyeNav.
+ * Fullscreen mirrored video background with graceful startup and fallback.
  */
-
-import { saveSettings } from './storage.js';
-
-// Internal smoothing buffer
-let smoothX = 0, smoothY = 0, initialized = false;
 
 export async function initTracker() {
-  console.log('[EyeNav] Starting WebGazer...');
-  await window.webgazer.setRegression('ridge')
-    .showVideoPreview(true)
-    .showPredictionPoints(false)
+  console.log('[EyeNav] Tracker initializing...');
+
+  // -----------------------------
+  // 1. Fullscreen mirrored webcam
+  // -----------------------------
+  const video = document.getElementById('eyeVideo');
+  if (!video) {
+    console.error('[EyeNav] #eyeVideo not found');
+    return;
+  }
+
+  // Force fullscreen fit + mirror
+  Object.assign(video.style, {
+    position: 'fixed',
+    top: '0',
+    left: '0',
+    width: '100vw',
+    height: '100vh',
+    objectFit: 'cover',
+    transform: 'scaleX(-1)',
+    opacity: '0.25',
+    zIndex: '-1',
+  });
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user' },
+      audio: false
+    });
+    video.srcObject = stream;
+    video.play().catch(() => {});
+    console.log('[EyeNav] Webcam stream active.');
+  } catch (err) {
+    console.error('[EyeNav] Camera access failed:', err);
+    alert('Please allow camera access for EyeNav tracking to work.');
+  }
+
+  // ------------------------------------
+  // 2. Initialize WebGazer for gaze data
+  // ------------------------------------
+  if (!window.webgazer) {
+    console.error('[EyeNav] WebGazer.js not loaded.');
+    return;
+  }
+
+  // Hide WebGazer's internal preview and overlay
+  window.webgazer.showVideoPreview(false).showPredictionPoints(false).showFaceOverlay(false);
+
+  // Basic calibration model
+  window.webgazer.setRegression('ridge')
+    .setGazeListener((data, elapsedTime) => {
+      if (!data) return;
+
+      // Normalize to viewport size
+      const x = Math.min(Math.max(data.x, 0), window.innerWidth);
+      const y = Math.min(Math.max(data.y, 0), window.innerHeight);
+
+      // Dispatch custom event
+      const evt = new CustomEvent('gazeUpdate', { detail: { x, y, t: elapsedTime } });
+      document.dispatchEvent(evt);
+    })
     .begin();
 
-  // Mirror feed toggle
-  if (window.EyeNavConfig.mirror) {
-    const vid = document.getElementById('eyeVideo');
-    vid.style.transform = 'scaleX(-1)';
-    window.webgazer.params.videoViewer = true;
-  }
+  console.log('[EyeNav] WebGazer started.');
 
-  initialized = true;
-  startLoop();
-}
+  // ------------------------------------------
+  // 3. Fallback + auto-recovery if WebGazer stalls
+  // ------------------------------------------
+  let lastUpdate = performance.now();
+  document.addEventListener('gazeUpdate', () => lastUpdate = performance.now());
 
-window.webgazer.showVideo(false).showFaceOverlay(false);
-const video = document.getElementById("eyeVideo");
-navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
-  .then(stream => {
-    video.srcObject = stream;
-    video.style.objectFit = "cover";
-    video.style.width = "100vw";
-    video.style.height = "100vh";
-  })
-  .catch(err => console.error("[EyeNav] Camera init failed:", err));
-
-/**
- * Basic linear interpolation smoothing.
- */
-function lerp(a, b, t) { return a + (b - a) * t; }
-
-/**
- * Main gaze streaming loop (requestAnimationFrame synchronized)
- */
-function startLoop() {
-  const { smoothing, deadZone } = window.EyeNavConfig;
-  const cursorEvent = new CustomEvent('gazeUpdate', { detail: { x: 0, y: 0 } });
-
-  function loop() {
-    const pred = window.webgazer.getCurrentPrediction();
-    if (pred) {
-      // Mirror correction
-      let x = pred.x;
-      if (window.EyeNavConfig.mirror)
-        x = window.innerWidth - x;
-
-      // Smoothing filter
-      smoothX = lerp(smoothX || x, x, smoothing);
-      smoothY = lerp(smoothY || pred.y, pred.y, smoothing);
-
-      // Dead zone filter
-      const dx = Math.abs(smoothX - x);
-      const dy = Math.abs(smoothY - pred.y);
-      if (dx < deadZone && dy < deadZone) {
-        // hold
-      } else {
-        cursorEvent.detail.x = smoothX;
-        cursorEvent.detail.y = smoothY;
-        document.dispatchEvent(cursorEvent);
+  setInterval(() => {
+    const now = performance.now();
+    if (now - lastUpdate > 5000) {
+      console.warn('[EyeNav] WebGazer appears idle. Attempting restart...');
+      try {
+        window.webgazer.pause();
+        window.webgazer.resume();
+        lastUpdate = now;
+      } catch (e) {
+        console.error('[EyeNav] WebGazer recovery failed:', e);
       }
     }
-    requestAnimationFrame(loop);
-  }
+  }, 5000);
 
-  requestAnimationFrame(loop);
-}
+  // ------------------------------------------
+  // 4. Mirror safety and resize handling
+  // ------------------------------------------
+  window.addEventListener('resize', () => {
+    video.width = window.innerWidth;
+    video.height = window.innerHeight;
+  });
 
-/**
- * Trigger manual recalibration
- */
-export async function recalibrate() {
-  console.log('[EyeNav] Starting 9-point calibration...');
+  // ------------------------------------------
+  // 5. Basic debug overlay
+  // ------------------------------------------
   const overlay = document.getElementById('overlayCanvas');
-  const ctx = overlay.getContext('2d');
-  const points = 3, stepX = window.innerWidth / (points + 1), stepY = window.innerHeight / (points + 1);
+  if (overlay) {
+    overlay.width = window.innerWidth;
+    overlay.height = window.innerHeight;
+    const ctx = overlay.getContext('2d');
 
-  for (let i = 1; i <= points; i++) {
-    for (let j = 1; j <= points; j++) {
-      const x = stepX * i, y = stepY * j;
+    let x = window.innerWidth / 2;
+    let y = window.innerHeight / 2;
+    document.addEventListener('gazeUpdate', (e) => {
+      x = e.detail.x;
+      y = e.detail.y;
+    });
+
+    function drawDot() {
       ctx.clearRect(0, 0, overlay.width, overlay.height);
       ctx.beginPath();
-      ctx.arc(x, y, 20, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0,255,255,0.8)';
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0,255,255,0.3)';
       ctx.fill();
-      await new Promise(r => setTimeout(r, 500));
-      window.webgazer.recordScreenPosition(x, y, 'click');
+      requestAnimationFrame(drawDot);
     }
+    drawDot();
   }
-  ctx.clearRect(0, 0, overlay.width, overlay.height);
-  console.log('[EyeNav] Calibration complete.');
-  await saveSettings('calibration', { timestamp: Date.now() });
+
+  console.log('[EyeNav] Tracker fully initialized.');
 }
