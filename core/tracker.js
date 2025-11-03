@@ -1,7 +1,7 @@
 /**
  * EyeNav – tracker.js
  * Initializes WebGazer gaze tracking and webcam feed for EyeNav.
- * Fullscreen mirrored video background with graceful startup and fallback.
+ * Fullscreen mirrored video background with brightness control and fallback.
  */
 
 export async function initTracker() {
@@ -16,7 +16,7 @@ export async function initTracker() {
     return;
   }
 
-  // Force fullscreen fit + mirror
+  // Fullscreen & mirrored
   Object.assign(video.style, {
     position: 'fixed',
     top: '0',
@@ -25,18 +25,30 @@ export async function initTracker() {
     height: '100vh',
     objectFit: 'cover',
     transform: 'scaleX(-1)',
-    opacity: '0.25',
-    zIndex: '-1',
+    zIndex: '-1'
   });
 
   try {
+    // requestUserMedia with exposure bias (some browsers ignore)
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user' },
+      video: {
+        facingMode: 'user',
+        advanced: [
+          { exposureMode: 'continuous' },
+          { exposureCompensation: 1.0 },
+          { brightness: 1.0 }
+        ]
+      },
       audio: false
     });
+
     video.srcObject = stream;
     video.play().catch(() => {});
     console.log('[EyeNav] Webcam stream active.');
+
+    // Apply current brightness from config
+    const brightness = window.EyeNavConfig?.brightness || 1.4;
+    video.style.filter = `brightness(${brightness}) contrast(1.2)`;
   } catch (err) {
     console.error('[EyeNav] Camera access failed:', err);
     alert('Please allow camera access for EyeNav tracking to work.');
@@ -50,19 +62,19 @@ export async function initTracker() {
     return;
   }
 
-  // Hide WebGazer's internal preview and overlay
-  window.webgazer.showVideoPreview(false).showPredictionPoints(false).showFaceOverlay(false);
+  // Hide WebGazer internal preview and overlays
+  window.webgazer
+    .showVideoPreview(false)
+    .showPredictionPoints(false)
+    .showFaceOverlay(false);
 
   // Basic calibration model
-  window.webgazer.setRegression('ridge')
+  window.webgazer
+    .setRegression('ridge')
     .setGazeListener((data, elapsedTime) => {
       if (!data) return;
-
-      // Normalize to viewport size
       const x = Math.min(Math.max(data.x, 0), window.innerWidth);
       const y = Math.min(Math.max(data.y, 0), window.innerHeight);
-
-      // Dispatch custom event
       const evt = new CustomEvent('gazeUpdate', { detail: { x, y, t: elapsedTime } });
       document.dispatchEvent(evt);
     })
@@ -71,10 +83,37 @@ export async function initTracker() {
   console.log('[EyeNav] WebGazer started.');
 
   // ------------------------------------------
-  // 3. Fallback + auto-recovery if WebGazer stalls
+  // 3. Apply brightness to internal WebGazer feed
+  // ------------------------------------------
+  setTimeout(() => {
+    const wgVideo =
+      document.querySelector('#webgazerVideoFeed') ||
+      document.querySelector('video[src^="blob"]');
+
+    if (wgVideo) {
+      const brightness = window.EyeNavConfig?.brightness || 1.6;
+      wgVideo.style.filter = `brightness(${brightness}) contrast(1.3)`;
+      wgVideo.style.opacity = '1';
+      wgVideo.style.display = 'block';
+      wgVideo.style.position = 'fixed';
+      wgVideo.style.top = '0';
+      wgVideo.style.left = '0';
+      wgVideo.style.width = '100vw';
+      wgVideo.style.height = '100vh';
+      wgVideo.style.objectFit = 'cover';
+      wgVideo.style.transform = 'scaleX(-1)';
+      wgVideo.style.zIndex = '-2';
+      console.log('[EyeNav] Brightness filter applied to internal WebGazer video.');
+    } else {
+      console.warn('[EyeNav] Internal WebGazer video not found (might be renamed).');
+    }
+  }, 2500);
+
+  // ------------------------------------------
+  // 4. Fallback + auto-recovery if WebGazer stalls
   // ------------------------------------------
   let lastUpdate = performance.now();
-  document.addEventListener('gazeUpdate', () => lastUpdate = performance.now());
+  document.addEventListener('gazeUpdate', () => (lastUpdate = performance.now()));
 
   setInterval(() => {
     const now = performance.now();
@@ -91,7 +130,7 @@ export async function initTracker() {
   }, 5000);
 
   // ------------------------------------------
-  // 4. Mirror safety and resize handling
+  // 5. Mirror safety and resize handling
   // ------------------------------------------
   window.addEventListener('resize', () => {
     video.width = window.innerWidth;
@@ -99,16 +138,16 @@ export async function initTracker() {
   });
 
   // ------------------------------------------
-  // 5. Basic debug overlay
+  // 6. Basic debug overlay
   // ------------------------------------------
   const overlay = document.getElementById('overlayCanvas');
   if (overlay) {
     overlay.width = window.innerWidth;
     overlay.height = window.innerHeight;
     const ctx = overlay.getContext('2d');
-
     let x = window.innerWidth / 2;
     let y = window.innerHeight / 2;
+
     document.addEventListener('gazeUpdate', (e) => {
       x = e.detail.x;
       y = e.detail.y;
