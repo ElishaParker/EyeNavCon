@@ -132,37 +132,63 @@ export async function initTracker() {
     .observe(document.body, { childList: true, subtree: true });
 
   // -------------------------------------------------
-  // 4. Gaze listener with coordinate normalization
+  // -------------------------------------------------
+  // 4. Gaze listener – cross-browser fixed
   // -------------------------------------------------
   let lastEmit = 0;
-  const emitInterval = 1000 / 30; // 30Hz cap
+  const emitInterval = 1000 / 30; // 30Hz
+  let globalListenerAttached = false;
 
-  window.webgazer.setGazeListener((data, elapsedTime) => {
-    if (!data) return;
-    const now = performance.now();
-    if (now - lastEmit < emitInterval) return;
-    lastEmit = now;
+  function attachGlobalGazeListener() {
+    if (globalListenerAttached) return;
+    globalListenerAttached = true;
 
-    const videoW = window.webgazer.params?.videoWidth || 320;
-    const videoH = window.webgazer.params?.videoHeight || 240;
-    const scaleX = window.innerWidth / videoW;
-    const scaleY = window.innerHeight / videoH;
+    const gzr = window.webgazer;
 
-    const x = Math.min(Math.max(data.x * scaleX, 0), window.innerWidth);
-    const y = Math.min(Math.max(data.y * scaleY, 0), window.innerHeight);
+    gzr.setGazeListener((data, elapsedTime) => {
+      if (!data) return;
 
-    document.dispatchEvent(
-      new CustomEvent('gazeUpdate', { detail: { x, y, t: elapsedTime } })
-    );
-  });
+      const now = performance.now();
+      if (now - lastEmit < emitInterval) return;
+      lastEmit = now;
 
-  console.log('[EyeNav] Gaze listener active.');
+      // Always re-sync dimensions in case the browser changed layout
+      const container = document.getElementById('webgazerContainer');
+      const containerW = container?.offsetWidth || window.innerWidth;
+      const containerH = container?.offsetHeight || window.innerHeight;
+
+      const videoW = gzr.params?.videoWidth || containerW;
+      const videoH = gzr.params?.videoHeight || containerH;
+      const scaleX = window.innerWidth / videoW;
+      const scaleY = window.innerHeight / videoH;
+
+      const x = Math.min(Math.max(data.x * scaleX, 0), window.innerWidth);
+      const y = Math.min(Math.max(data.y * scaleY, 0), window.innerHeight);
+
+      // Dispatch to global window context for all listeners
+      window.dispatchEvent(
+        new CustomEvent('gazeUpdate', { detail: { x, y, t: elapsedTime } })
+      );
+    });
+
+    console.log('[EyeNav] Global gaze listener attached.');
+  }
+
+  // Retry until model is active
+  const listenerWait = setInterval(() => {
+    if (window.webgazer?.isReady) {
+      attachGlobalGazeListener();
+      clearInterval(listenerWait);
+    }
+  }, 500);
+
 
   // -------------------------------------------------
   // 5. Auto-recovery if WebGazer stalls
   // -------------------------------------------------
   let lastUpdate = performance.now();
-  document.addEventListener('gazeUpdate', () => (lastUpdate = performance.now()));
+  window.addEventListener('gazeUpdate', () => (lastUpdate = performance.now()));
+
 
   setInterval(() => {
     const now = performance.now();
