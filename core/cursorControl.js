@@ -30,19 +30,23 @@ export async function initCursor() {
 
   /**
    * Renders cursor and calls dwell logic each frame
-   */
+  */
   function render() {
-    // Move cursor dot smoothly
-    x += (targetX - x) * 0.5;
-    y += (targetY - y) * 0.5;
-    dot.style.transform = `translate(${x}px, ${y}px)`;
-
-    // Find current element under gaze
-    const el = document.elementFromPoint(x, y);
-    handleDwell(el);
-
+  // skip until valid coordinates exist
+  if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) {
     requestAnimationFrame(render);
+    return;
   }
+
+  x += (targetX - x) * 0.5;
+  y += (targetY - y) * 0.5;
+  dot.style.transform = `translate(${x}px, ${y}px)`;
+
+  const el = document.elementFromPoint(x, y);
+  handleDwell(el);
+  requestAnimationFrame(render);
+}
+
 
   /**
    * Visual progress indicator for dwell clicks
