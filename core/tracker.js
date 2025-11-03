@@ -133,54 +133,51 @@ export async function initTracker() {
 
   // -------------------------------------------------
   // -------------------------------------------------
-  // -------------------------------------------------
-  // 4. Calibrated gaze listener – converts preview scale to viewport scale
-  // -------------------------------------------------
-  let lastEmit = 0;
-  const emitInterval = 1000 / 30; // 30Hz
-  let previewRect = null;
+// 4. Calibrated gaze listener – cross-browser scaling and normalization
+// -------------------------------------------------
+let lastEmit = 0;
+const emitInterval = 1000 / 30; // 30Hz
+let previewRect = null;
+let gazeActive = false;
 
-  function getPreviewRect() {
-    const preview = document.querySelector('#webgazerVideoFeed') || document.querySelector('video[src^="blob"]');
-    if (!preview) return null;
-
-    const rect = preview.getBoundingClientRect();
-    return {
-      x: rect.left,
-      y: rect.top,
-      w: rect.width,
-      h: rect.height,
-    };
+function getPreviewRect() {
+  const preview = document.querySelector('#webgazerVideoFeed') || document.querySelector('video[src^="blob"]');
+  if (!preview) return null;
+  const rect = preview.getBoundingClientRect();
+  return { x: rect.left, y: rect.top, w: rect.width, h: rect.height };
 }
 
 function remapToViewport(data) {
   if (!previewRect) previewRect = getPreviewRect();
   if (!previewRect) return { x: data.x, y: data.y };
 
-  // Compute proportional position within preview window
-  const px = (data.x - 0) / previewRect.w; // 0 → 1 horizontally
-  const py = (data.y - 0) / previewRect.h; // 0 → 1 vertically
+  // If Chrome gives 0–1 normalized coords, rescale to viewport
+  let gx = data.x, gy = data.y;
+  if (gx <= 1 && gy <= 1) {
+    gx *= previewRect.w;
+    gy *= previewRect.h;
+  }
 
-  // Map those proportions to full window
+  const px = gx / previewRect.w;
+  const py = gy / previewRect.h;
+
   const vx = px * window.innerWidth;
   const vy = py * window.innerHeight;
-
   return { x: vx, y: vy };
 }
 
 function attachScaledGazeListener() {
-  console.log('[EyeNav] Scaled gaze listener active.');
+  if (gazeActive) return;
+  gazeActive = true;
+  console.log('[EyeNav] Scaled gaze listener attached.');
 
   window.webgazer.setGazeListener((data, elapsedTime) => {
     if (!data) return;
-
     const now = performance.now();
     if (now - lastEmit < emitInterval) return;
     lastEmit = now;
 
     const mapped = remapToViewport(data);
-
-    // Clamp to window bounds
     const x = Math.min(Math.max(mapped.x, 0), window.innerWidth);
     const y = Math.min(Math.max(mapped.y, 0), window.innerHeight);
 
@@ -190,48 +187,43 @@ function attachScaledGazeListener() {
   });
 }
 
-  // Refresh the preview rect when layout changes
-  window.addEventListener('resize', () => (previewRect = getPreviewRect()));
-  new MutationObserver(() => (previewRect = getPreviewRect())).observe(document.body, { childList: true, subtree: true });
+// Dynamic rect refresh
+window.addEventListener('resize', () => (previewRect = getPreviewRect()));
+new MutationObserver(() => (previewRect = getPreviewRect())).observe(document.body, { childList: true, subtree: true });
 
-  // Start listener once WebGazer is ready
-  const gazeWait = setInterval(() => {
-    if (window.webgazer?.isReady) {
-      attachScaledGazeListener();
-      clearInterval(gazeWait);
+// Wait for WebGazer to initialize
+const waitForReady = setInterval(() => {
+  if (window.webgazer && window.webgazer.isReady) {
+    attachScaledGazeListener();
+    clearInterval(waitForReady);
+  }
+}, 500);
+
+// Fallback: force attach after 4s even if .isReady is unreliable
+setTimeout(() => {
+  if (!gazeActive) attachScaledGazeListener();
+}, 4000);
+
+// -------------------------------------------------
+// 5. Auto-recovery if WebGazer stalls
+// -------------------------------------------------
+let lastUpdate = performance.now();
+window.addEventListener('gazeUpdate', () => (lastUpdate = performance.now()));
+
+setInterval(() => {
+  const now = performance.now();
+  if (now - lastUpdate > 5000) {
+    console.warn('[EyeNav] WebGazer appears idle. Restarting...');
+    try {
+      window.webgazer.pause();
+      window.webgazer.resume();
+      lastUpdate = now;
+    } catch (e) {
+      console.error('[EyeNav] WebGazer recovery failed:', e);
     }
-  }, 500);
+  }
+}, 5000);
 
-
-  // Retry until model is active
-  const listenerWait = setInterval(() => {
-    if (window.webgazer?.isReady) {
-      attachGlobalGazeListener();
-      clearInterval(listenerWait);
-    }
-  }, 500);
-
-
-  // -------------------------------------------------
-  // 5. Auto-recovery if WebGazer stalls
-  // -------------------------------------------------
-  let lastUpdate = performance.now();
-  window.addEventListener('gazeUpdate', () => (lastUpdate = performance.now()));
-
-
-  setInterval(() => {
-    const now = performance.now();
-    if (now - lastUpdate > 5000) {
-      console.warn('[EyeNav] WebGazer appears idle. Restarting...');
-      try {
-        window.webgazer.pause();
-        window.webgazer.resume();
-        lastUpdate = now;
-      } catch (e) {
-        console.error('[EyeNav] WebGazer recovery failed:', e);
-      }
-    }
-  }, 5000);
 
   // -------------------------------------------------
   // 6. Smooth debug overlay dot
