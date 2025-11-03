@@ -5,34 +5,47 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>EyeNav Prototype</title>
   <link rel="stylesheet" href="./ui/styles.css" />
+
+  <!-- Load WebGazer.js (primary gaze engine) -->
   <script src="https://cdn.jsdelivr.net/npm/webgazer/dist/webgazer.min.js"></script>
 </head>
 
 <body>
-  <!-- Live camera preview -->
+  <!-- Main video feed -->
   <video id="eyeVideo" autoplay playsinline></video>
 
-  <!-- Overlay canvas for crosshair / dwell ring -->
+  <!-- Visual overlays -->
   <canvas id="overlayCanvas"></canvas>
-
-  <!-- Floating cursor -->
   <div id="cursorDot"></div>
 
-  <!-- Settings menu -->
+  <!-- Menu placeholder -->
   <div id="menuContainer"></div>
 
+  <!-- Core Modules -->
   <script type="module">
     import { initTracker } from './core/tracker.js';
     import { initBlinkDetector } from './core/blinkDetector.js';
     import { initCursor } from './core/cursorControl.js';
     import { initMenu } from './ui/menuSystem.js';
     import { restoreSettings } from './core/storage.js';
+    import { connectToEyeNav, EyeNavDiagnostics } from './integration/connectToEyeNav.js';
 
+    // Initialize core EyeNav modules
     await restoreSettings();
     await initTracker();
     await initBlinkDetector();
     await initCursor();
     await initMenu();
+
+    // ---- Integration + Diagnostics Section ----
+    const bridge = connectToEyeNav({
+      onGaze: (x, y) => console.log("Gaze:", x.toFixed(0), y.toFixed(0)),
+      onBlink: info => console.log("Blink detected:", info),
+      onClick: info => console.log("Click event:", info)
+    });
+
+    // Optional visual HUD bottom-right showing coordinates + blink count
+    EyeNavDiagnostics.enable();
   </script>
 </body>
 </html>
