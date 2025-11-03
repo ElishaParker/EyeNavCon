@@ -80,116 +80,103 @@ export async function initTracker() {
   console.log('[EyeNav] Face overlay and prediction points enabled.');
 
   // -------------------------------------------------
-  // 3. Unified feed normalization (cross-browser)
+  // 3. Full cross-browser WebGazer viewport normalization
   // -------------------------------------------------
-  function ensureFeedConsistency() {
-    const wgVideo =
-      document.querySelector('#webgazerVideoFeed') ||
-      document.querySelector('video[src^="blob"]');
-    if (!wgVideo) return;
-
+  function normalizeWebGazerLayers() {
     const brightness = window.EyeNavConfig?.brightness || 1.6;
-    Object.assign(wgVideo.style, {
-      position: 'fixed',
-      top: '0',
-      left: '0',
-      width: '100vw',
-      height: '100vh',
-      objectFit: 'cover',
-      transform: 'scaleX(-1)',
-      filter: `brightness(${brightness}) contrast(1.3)`,
-      opacity: '1',
-      zIndex: '-2',
-      pointerEvents: 'none',
-    });
+    const selectors = [
+      '#webgazerContainer',
+      '#webgazerVideoFeed',
+      '#webgazerVideoCanvas',
+      '#webgazerFaceOverlay',
+      '#webgazerTargetDot',
+      'video[src^="blob"]'
+    ];
 
-    // normalize coordinates across browsers
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      if (!el) continue;
+
+      Object.assign(el.style, {
+        position: 'fixed',
+        top: '0',
+        left: '0',
+        width: '100vw',
+        height: '100vh',
+        objectFit: 'cover',
+        transform: 'scaleX(-1)',
+        zIndex: '-3',
+        pointerEvents: 'none',
+      });
+
+      if (el.tagName === 'VIDEO') {
+        el.style.filter = `brightness(${brightness}) contrast(1.3)`;
+        el.style.opacity = '1';
+      }
+    }
+
+    // Ensure WebGazer coordinates map to full viewport
     if (window.webgazer?.params) {
       window.webgazer.params.videoWidth = window.innerWidth;
       window.webgazer.params.videoHeight = window.innerHeight;
       window.webgazer.params.screenshotWidth = window.innerWidth;
       window.webgazer.params.screenshotHeight = window.innerHeight;
     }
-    console.log('[EyeNav] Unified feed + viewport normalization applied.');
+
+    console.log('[EyeNav] WebGazer layers normalized to viewport.');
   }
 
-  // Apply after model load + on DOM changes
-  setTimeout(ensureFeedConsistency, 1500);
-  const observer = new MutationObserver(ensureFeedConsistency);
-  observer.observe(document.body, { childList: true, subtree: true });
-  window.addEventListener('resize', ensureFeedConsistency);
+  setTimeout(normalizeWebGazerLayers, 1500);
+  window.addEventListener('resize', normalizeWebGazerLayers);
+  new MutationObserver(normalizeWebGazerLayers)
+    .observe(document.body, { childList: true, subtree: true });
 
   // -------------------------------------------------
- // -------------------------------------------------
-// 4. Normalize all WebGazer layers + coordinate scaling
-// -------------------------------------------------
-function resizeAllWebGazerLayers() {
-  const brightness = window.EyeNavConfig?.brightness || 1.6;
+  // 4. Gaze listener with coordinate normalization
+  // -------------------------------------------------
+  let lastEmit = 0;
+  const emitInterval = 1000 / 30; // 30Hz cap
 
-  // Include the container div too
-  const selectors = [
-    '#webgazerContainer',
-    '#webgazerVideoFeed',
-    '#webgazerVideoCanvas',
-    '#webgazerFaceOverlay',
-    '#webgazerTargetDot',
-    'video[src^="blob"]'
-  ];
+  window.webgazer.setGazeListener((data, elapsedTime) => {
+    if (!data) return;
+    const now = performance.now();
+    if (now - lastEmit < emitInterval) return;
+    lastEmit = now;
 
-  for (const sel of selectors) {
-    const el = document.querySelector(sel);
-    if (!el) continue;
-    Object.assign(el.style, {
-      position: 'fixed',
-      top: '0',
-      left: '0',
-      width: '100vw',
-      height: '100vh',
-      objectFit: 'cover',
-      transform: 'scaleX(-1)',
-      zIndex: '-3',
-      pointerEvents: 'none',
-    });
-    if (el.tagName === 'VIDEO') {
-      el.style.filter = `brightness(${brightness}) contrast(1.3)`;
-      el.style.opacity = '1';
+    const videoW = window.webgazer.params?.videoWidth || 320;
+    const videoH = window.webgazer.params?.videoHeight || 240;
+    const scaleX = window.innerWidth / videoW;
+    const scaleY = window.innerHeight / videoH;
+
+    const x = Math.min(Math.max(data.x * scaleX, 0), window.innerWidth);
+    const y = Math.min(Math.max(data.y * scaleY, 0), window.innerHeight);
+
+    document.dispatchEvent(
+      new CustomEvent('gazeUpdate', { detail: { x, y, t: elapsedTime } })
+    );
+  });
+
+  console.log('[EyeNav] Gaze listener active.');
+
+  // -------------------------------------------------
+  // 5. Auto-recovery if WebGazer stalls
+  // -------------------------------------------------
+  let lastUpdate = performance.now();
+  document.addEventListener('gazeUpdate', () => (lastUpdate = performance.now()));
+
+  setInterval(() => {
+    const now = performance.now();
+    if (now - lastUpdate > 5000) {
+      console.warn('[EyeNav] WebGazer appears idle. Restarting...');
+      try {
+        window.webgazer.pause();
+        window.webgazer.resume();
+        lastUpdate = now;
+      } catch (e) {
+        console.error('[EyeNav] WebGazer recovery failed:', e);
+      }
     }
-  }
-
-  console.log('[EyeNav] All WebGazer layers + container resized to viewport.');
-}
-
-// Run after model load
-setTimeout(resizeAllWebGazerLayers, 1500);
-window.addEventListener('resize', resizeAllWebGazerLayers);
-new MutationObserver(resizeAllWebGazerLayers)
-  .observe(document.body, { childList: true, subtree: true });
-
-// -------------------------------------------------
-// 5. Gaze listener with coordinate normalization
-// -------------------------------------------------
-let lastEmit = 0;
-const emitInterval = 1000 / 30; // 30Hz
-
-window.webgazer.setGazeListener((data, elapsedTime) => {
-  if (!data) return;
-  const now = performance.now();
-  if (now - lastEmit < emitInterval) return;
-  lastEmit = now;
-
-  // Normalize if WebGazer is using a smaller base resolution
-  const videoW = window.webgazer.params?.videoWidth || 320;
-  const videoH = window.webgazer.params?.videoHeight || 240;
-  const scaleX = window.innerWidth / videoW;
-  const scaleY = window.innerHeight / videoH;
-
-  const x = Math.min(Math.max(data.x * scaleX, 0), window.innerWidth);
-  const y = Math.min(Math.max(data.y * scaleY, 0), window.innerHeight);
-
-  document.dispatchEvent(
-    new CustomEvent('gazeUpdate', { detail: { x, y, t: elapsedTime } })
-  );
-});
+  }, 5000);
 
   // -------------------------------------------------
   // 6. Smooth debug overlay dot
@@ -221,7 +208,7 @@ window.webgazer.setGazeListener((data, elapsedTime) => {
   }
 
   // -------------------------------------------------
-  // 7. Resize safety
+  // 7. Resize safety for overlay and background
   // -------------------------------------------------
   window.addEventListener('resize', () => {
     video.width = window.innerWidth;
@@ -233,7 +220,7 @@ window.webgazer.setGazeListener((data, elapsedTime) => {
   });
 
   // -------------------------------------------------
-  // 8. Post-calibration cleanup option
+  // 8. Debug overlay toggle
   // -------------------------------------------------
   window.hideWebGazerDebug = () => {
     window.webgazer.showVideoPreview(false);
@@ -241,6 +228,19 @@ window.webgazer.setGazeListener((data, elapsedTime) => {
     window.webgazer.showPredictionPoints(false);
     console.log('[EyeNav] WebGazer debug overlays hidden.');
   };
+
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'F2') {
+      const state = window.webgazer.isVideoShown;
+      if (state) window.hideWebGazerDebug();
+      else {
+        window.webgazer.showVideoPreview(true);
+        window.webgazer.showFaceOverlay(true);
+        window.webgazer.showPredictionPoints(true);
+        console.log('[EyeNav] WebGazer debug overlays shown.');
+      }
+    }
+  });
 
   console.log('[EyeNav] Tracker fully initialized.');
 }
