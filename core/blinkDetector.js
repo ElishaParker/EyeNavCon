@@ -63,10 +63,7 @@
        const duration = performance.now() - blinkStart;
        blinkActive = false;
        if (duration > MIN_BLINK_MS && duration < MAX_BLINK_MS) {
--        const event = new CustomEvent('eyeblink', {
--          detail: { duration, strength: intensityChange }
--        });
--        document.dispatchEvent(event);
+
 +        const detail = { duration, strength: intensityChange };
 +        eventTargets.forEach((target) =>
 +          target.dispatchEvent(new CustomEvent('eyeblink', { detail }))
