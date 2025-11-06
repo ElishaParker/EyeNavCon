@@ -27,29 +27,25 @@
        <div id="menuBody">
          <label>
            Smoothing
--          <input id="smoothRange" type="range" min="0" max="1" step="0.05" value="${window.EyeNavConfig.smoothing || 0.3}">
--          <span id="smoothVal">${window.EyeNavConfig.smoothing || 0.3}</span>
+
 +          <input id="smoothRange" type="range" min="0" max="1" step="0.05" value="${config.smoothing ?? 0.3}">
 +          <span id="smoothVal">${config.smoothing ?? 0.3}</span>
          </label>
          <label>
            Dwell (ms)
--          <input id="dwellRange" type="range" min="300" max="1500" step="50" value="${window.EyeNavConfig.dwellTime || 800}">
--          <span id="dwellVal">${window.EyeNavConfig.dwellTime || 800}</span>
+
 +          <input id="dwellRange" type="range" min="300" max="1500" step="50" value="${config.dwellTime ?? 800}">
 +          <span id="dwellVal">${config.dwellTime ?? 800}</span>
          </label>
          <label>
            Dead Zone (px)
--          <input id="deadRange" type="range" min="0" max="50" step="2" value="${window.EyeNavConfig.deadZone || 12}">
--          <span id="deadVal">${window.EyeNavConfig.deadZone || 12}</span>
+
 +          <input id="deadRange" type="range" min="0" max="50" step="2" value="${config.deadZone ?? 12}">
 +          <span id="deadVal">${config.deadZone ?? 12}</span>
          </label>
          <label>
            Brightness
--          <input id="brightRange" type="range" min="0.5" max="2.0" step="0.05" value="${window.EyeNavConfig.brightness || 1.2}">
--          <span id="brightVal">${window.EyeNavConfig.brightness || 1.2}</span>
+
 +          <input id="brightRange" type="range" min="0.5" max="2.0" step="0.05" value="${config.brightness ?? 1.2}">
 +          <span id="brightVal">${config.brightness ?? 1.2}</span>
 +        </label>
@@ -104,7 +100,7 @@
 +    onsetVal.textContent  = onset.value;
    }
  
--  [smooth, dwell, dead, bright].forEach(slider => {
+
 +  [smooth, dwell, dead, bright, onset].forEach(slider => {
      slider.addEventListener('input', () => {
        updateVals();
@@ -161,7 +157,7 @@
    document.getElementById('resetBtn').onclick = () => {
      resetSettings();
      const video = document.getElementById('eyeVideo');
--    if (video) video.style.filter = `brightness(1.0) contrast(1.2)`;
+
 +    if (video) video.style.filter = `brightness(${window.EyeNavConfig.brightness}) contrast(1.2)`;
 +    smooth.value = window.EyeNavConfig.smoothing;
 +    dwell.value = window.EyeNavConfig.dwellTime;
