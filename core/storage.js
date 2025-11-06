@@ -10,7 +10,7 @@
  const DEFAULT_CONFIG = {
    smoothing: 0.3,
    dwellTime: 800,
--  deadZone: 12
+
 +  deadZone: 12,
 +  brightness: 1.2,
 +  onsetDelay: 300,
