@@ -24,8 +24,8 @@
    let targetX = x, targetY = y;
  
    // Dwell timing config (loaded from global config)
--  const dwellTime = window.EyeNavConfig?.dwellTime || 800;
--  const onsetDelay = window.EyeNavConfig?.onsetDelay || 300;
+
+
 +  let dwellTime = config.dwellTime ?? 800;
 +  let onsetDelay = config.onsetDelay ?? 300;
    let dwellTimer = null;
@@ -58,12 +58,7 @@
      targetY = e.detail.y;
    });
  
--  // Prevent real mouse from interfering
--  const disableMouse = e => e.stopImmediatePropagation();
--  ['mousemove', 'mousedown', 'mouseup', 'click'].forEach(evt =>
--    window.addEventListener(evt, disableMouse, true)
--  );
--
+
    /**
     * Render loop – update dot position and dwell ring
     */
