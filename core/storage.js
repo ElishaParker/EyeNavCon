@@ -26,7 +26,7 @@
    try {
      const saved = localStorage.getItem(STORAGE_KEY);
      if (saved) {
--      window.EyeNavConfig = JSON.parse(saved);
+
 +      const parsed = JSON.parse(saved);
 +      window.EyeNavConfig = { ...DEFAULT_CONFIG, ...parsed };
        console.log('[EyeNav] Settings restored from storage:', window.EyeNavConfig);
@@ -45,8 +45,8 @@
   */
  export function saveSettings(config) {
    try {
--    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
--    console.log('[EyeNav] Settings saved to storage:', config);
+
+
 +    const payload = { ...DEFAULT_CONFIG, ...config };
 +    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
 +    console.log('[EyeNav] Settings saved to storage:', payload);
