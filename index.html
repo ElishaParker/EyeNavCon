@@ -1,55 +1,70 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>EyeNav Prototype</title>
-  <link rel="stylesheet" href="./ui/styles.css" />
-
-  <!-- Load WebGazer.js (primary gaze engine) -->
-  <script src="https://cdn.jsdelivr.net/npm/webgazer/dist/webgazer.min.js"></script>
-</head>
-
-<body>
-  <!-- Main video feed -->
-  <video id="eyeVideo" autoplay playsinline></video>
-
-  <!-- Visual overlays -->
-  <canvas id="overlayCanvas"></canvas>
-  <div id="cursorDot"></div>
-
-  <!-- Menu placeholder -->
-  <div id="menuContainer"></div>
-
-  <!-- Core Modules -->
-  <script type="module">
-    import { initTracker } from './core/tracker.js';
-    import { initBlinkDetector } from './core/blinkDetector.js';
-    import { initCursor } from './core/cursorControl.js';
-    import { initMenu } from './ui/menuSystem.js';
-    import { restoreSettings } from './core/storage.js';
-    import { connectToEyeNav, EyeNavDiagnostics } from './integration/connectToEyeNav.js';
-
-    // -------------------------
-    // 1. Initialize all modules
-    // -------------------------
-    await restoreSettings();
-    await initTracker();
-    await initBlinkDetector();
-    await initCursor();
-    await initMenu();
-
-    // -------------------------
-    // 2. Integration + Diagnostics
-    // -------------------------
-    const bridge = connectToEyeNav({
-      onGaze: (x, y) => {}, // no console spam now
-      onBlink: info => console.log("[Blink detected]", info),
-      onClick: info => console.log("[Click event]", info)
-    });
-
-    EyeNavDiagnostics.enable();
-
-  </script>
-</body>
-</html>
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a/index.html b/index.html
+index 7e29b81b533c31c080c2a3efc488168d20901eef..d0696e4ead25bf3eb0f4f99a0691509a9dfd710a 100644
+--- a/index.html
++++ b/index.html
+@@ -1,55 +1,60 @@
+ <!DOCTYPE html>
+ <html lang="en">
+ <head>
+   <meta charset="UTF-8" />
+   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+   <title>EyeNav Prototype</title>
+   <link rel="stylesheet" href="./ui/styles.css" />
+ 
+   <!-- Load WebGazer.js (primary gaze engine) -->
+   <script src="https://cdn.jsdelivr.net/npm/webgazer/dist/webgazer.min.js"></script>
+ </head>
+ 
+ <body>
+   <!-- Main video feed -->
+   <video id="eyeVideo" autoplay playsinline></video>
+ 
+   <!-- Visual overlays -->
+   <canvas id="overlayCanvas"></canvas>
+   <div id="cursorDot"></div>
+ 
+   <!-- Menu placeholder -->
+   <div id="menuContainer"></div>
+ 
++  <script src="./core/tracker.js"></script>
++
+   <!-- Core Modules -->
+   <script type="module">
+-    import { initTracker } from './core/tracker.js';
+     import { initBlinkDetector } from './core/blinkDetector.js';
+     import { initCursor } from './core/cursorControl.js';
+     import { initMenu } from './ui/menuSystem.js';
+     import { restoreSettings } from './core/storage.js';
+     import { connectToEyeNav, EyeNavDiagnostics } from './integration/connectToEyeNav.js';
+ 
+     // -------------------------
+     // 1. Initialize all modules
+     // -------------------------
+     await restoreSettings();
++    const { initTracker } = window;
++    if (typeof initTracker !== 'function') {
++      throw new Error('EyeNav initTracker is not available on window');
++    }
+     await initTracker();
+     await initBlinkDetector();
+     await initCursor();
+     await initMenu();
+ 
+     // -------------------------
+     // 2. Integration + Diagnostics
+     // -------------------------
+     const bridge = connectToEyeNav({
+       onGaze: (x, y) => {}, // no console spam now
+       onBlink: info => console.log("[Blink detected]", info),
+       onClick: info => console.log("[Click event]", info)
+     });
+ 
+     EyeNavDiagnostics.enable();
+ 
+   </script>
+ </body>
+ </html>
+ 
+EOF
+)
