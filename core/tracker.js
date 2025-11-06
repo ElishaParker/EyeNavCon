@@ -5,7 +5,7 @@
 -  * face/eye debug overlay, and auto-recovery handling.
 -  */
 - 
-- export async function initTracker() {
+-  export async function initTracker() {
 -   console.log('[EyeNav] Tracker initializing...');
 - 
 -+  const config = window.EyeNavConfig || {};
